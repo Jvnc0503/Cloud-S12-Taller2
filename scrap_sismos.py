@@ -5,10 +5,10 @@ import uuid
 import re
 
 def lambda_handler(event, context):
-    # URL oficial indicada para los reportes sísmicos del IGP
+    # URL oficial indicada para los reportes sismicos del IGP
     url = "https://ultimosismo.igp.gob.pe/productos/reportes-sismicos"
     
-    # User-Agent estándar para simular una petición de navegador y evitar bloqueos por seguridad
+    # User-Agent estandar para simular una peticion de navegador y evitar bloqueos
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -18,7 +18,7 @@ def lambda_handler(event, context):
         if response.status_code != 200:
             return {
                 'statusCode': response.status_code,
-                'body': f'Error al acceder a la página del IGP: Código {response.status_code}'
+                'body': f'Error al acceder a la pagina del IGP: Codigo {response.status_code}'
             }
     except Exception as e:
         return {
@@ -29,7 +29,7 @@ def lambda_handler(event, context):
     soup = BeautifulSoup(response.content, 'html.parser')
     sismos_detectados = []
 
-    # --- ESTRATEGIA 1: Extracción mediante Tabla Estándar ---
+    # --- ESTRATEGIA 1: Extraccion mediante Tabla Estandar ---
     table = soup.find('table')
     if table:
         headers_text = [th.text.strip() for th in table.find_all('th')]
@@ -43,7 +43,7 @@ def lambda_handler(event, context):
             sismo_dict = {}
             for i, cell_value in enumerate(cells):
                 header_name = headers_text[i] if i < len(headers_text) else f"columna_{i}"
-                # Sanitizar nombres de columnas para que sean nombres de atributos válidos en DynamoDB
+                # Sanitizar nombres de columnas para que sean atributos validos en DynamoDB
                 attr_name = re.sub(r'[^a-zA-Z0-9_]', '_', header_name).strip('_')
                 sismo_dict[attr_name] = cell_value
             
@@ -71,36 +71,36 @@ def lambda_handler(event, context):
             if sismo_dict:
                 sismos_detectados.append(sismo_dict)
 
-    # Requerimiento estricto: Seleccionar los últimos 10 sismos reportados
-    10_ultimos_sismos = sismos_detectados[:10]
+    # Requerimiento estricto: Seleccionar los ultimos 10 sismos reportados
+    ultimos_10_sismos = sismos_detectados[:10]
 
-    if not 10_ultimos_sismos:
+    if not ultimos_10_sismos:
         return {
             'statusCode': 404,
-            'body': 'No se logró extraer ni estructurar información de sismos de la página web'
+            'body': 'No se logro extraer ni estructurar informacion de sismos de la pagina web'
         }
 
     # --- Almacenamiento en DynamoDB ---
     dynamodb = boto3.resource('dynamodb')
     table_db = dynamodb.Table('TablaSismosIGP')
 
-    # Limpiar registros previos de la tabla para mantenerla actualizada (siguiendo el patrón del Taller 2)
+    # Limpiar registros previos de la tabla para mantenerla actualizada
     try:
         scan = table_db.scan()
         with table_db.batch_writer() as batch:
             for each in scan.get('Items', []):
                 batch.delete_item(Key={'id': each['id']})
     except Exception:
-        pass  # Si la tabla está recién creada o vacía, ignorar el error de limpieza
+        pass  # Si la tabla esta recien creada o vacia, ignorar el error de limpieza
 
     # Insertar los nuevos registros procesados
     datos_guardados = []
-    for idx, sismo in enumerate(10_ultimos_sismos, start=1):
+    for idx, sismo in enumerate(ultimos_10_sismos, start=1):
         item_data = {
             'id': str(uuid.uuid4()),
             '_numero_registro': idx
         }
-        # Agregar los pares clave-valor extraídos
+        # Agregar los pares clave-valor extraidos
         for k, v in sismo.items():
             if k and v:
                 item_data[k] = v
